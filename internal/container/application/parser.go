@@ -34,24 +34,24 @@ func (r *Registry) Detect(data []byte) domain.Format {
 }
 func (r *Registry) Parse(ctx context.Context, data []byte, limits domain.Limits) (domain.Metadata, error) {
 	if int64(len(data)) > limits.MaxBytes {
-		return domain.Metadata{}, fmt.Errorf("container limit: %v", domain.Limit("container exceeds maximum bytes"))
+		return domain.Metadata{}, fmt.Errorf("container limit: %w", domain.Limit("container exceeds maximum bytes"))
 	}
 	format := r.Detect(data)
 	p, ok := r.parsers[format]
 	if !ok {
-		return domain.Metadata{}, fmt.Errorf("unsupported container: %v", domain.Unsupported("signature not recognized"))
+		return domain.Metadata{}, fmt.Errorf("unsupported container: %w", domain.Unsupported("signature not recognized"))
 	}
 	m, err := p.Parse(ctx, data, limits)
 	if err != nil {
-		return domain.Metadata{}, fmt.Errorf("parse %s: %v", format, err)
+		return domain.Metadata{}, fmt.Errorf("parse %s: %w", format, err)
 	}
 	m.Format = format
 	m.Size = int64(len(data))
 	if len(m.Tracks) > limits.MaxTracks {
-		return domain.Metadata{}, fmt.Errorf("track limit: %v", domain.Limit("track count exceeds limit"))
+		return domain.Metadata{}, fmt.Errorf("track limit: %w", domain.Limit("track count exceeds limit"))
 	}
 	if m.Duration > limits.MaxDuration {
-		return domain.Metadata{}, fmt.Errorf("duration limit: %v", domain.Limit("duration exceeds limit"))
+		return domain.Metadata{}, fmt.Errorf("duration limit: %w", domain.Limit("duration exceeds limit"))
 	}
 	return m, nil
 }

@@ -13,7 +13,7 @@ type MP4Parser struct{}
 
 func (MP4Parser) Parse(ctx context.Context, data []byte, limits domain.Limits) (domain.Metadata, error) {
 	if len(data) < 16 {
-		return domain.Metadata{}, fmt.Errorf("mp4 header: %v", domain.Corrupt(int64(len(data)), "MP4 header truncated"))
+		return domain.Metadata{}, fmt.Errorf("mp4 header: %w", domain.Corrupt(int64(len(data)), "MP4 header truncated"))
 	}
 	offset := 0
 	seenFTYP, seenMedia := false, false
