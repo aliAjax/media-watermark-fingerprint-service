@@ -20,7 +20,9 @@ func (s Samples) DurationSeconds() float64 {
 }
 func (s Samples) Mono() []float32 {
 	if s.Channels <= 1 {
-		return s.Values
+		out := make([]float32, len(s.Values))
+		copy(out, s.Values)
+		return out
 	}
 	out := make([]float32, s.Frames())
 	for i := range out {
