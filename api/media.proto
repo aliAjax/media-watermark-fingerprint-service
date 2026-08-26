@@ -1,0 +1,11 @@
+syntax = "proto3";
+package media.v1;
+option go_package = "github.com/acme/media-watermark-fingerprinting/internal/platform/grpcx";
+import "google/protobuf/empty.proto";
+import "google/protobuf/struct.proto";
+service TaskService {
+  rpc Health(google.protobuf.Empty) returns (google.protobuf.Struct);
+  rpc Submit(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc Get(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc Watch(google.protobuf.Struct) returns (stream google.protobuf.Struct);
+}
