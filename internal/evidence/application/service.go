@@ -21,7 +21,7 @@ type Service struct {
 	clock Clock
 }
 
-func New(store Store, clock Clock) *Service { return &Service{} }
+func New(store Store, clock Clock) *Service { return &Service{store: store, clock: clock} }
 func (s *Service) CreateAsset(ctx context.Context, a domain.Asset) (domain.Asset, error) {
 	if a.ID == "" || a.ObjectKey == "" {
 		return a, fmt.Errorf("asset id and object key required")

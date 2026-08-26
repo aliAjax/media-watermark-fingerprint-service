@@ -15,7 +15,7 @@ type Memory struct {
 }
 
 func NewMemory() *Memory {
-	return &Memory{}
+	return &Memory{assets: make(map[string]domain.Asset), events: make(map[string][]domain.Event), reviews: make(map[string]domain.Review)}
 }
 func (m *Memory) CreateAsset(ctx context.Context, a domain.Asset) error {
 	select {
