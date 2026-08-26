@@ -63,6 +63,14 @@ func (s *ConfigStore) Publish(ctx context.Context, id string) (domain.AlgorithmC
 		return domain.AlgorithmConfig{}, fmt.Errorf("algorithm %q has no draft", id)
 	}
 	now := time.Now().UTC()
+	// Only one version may be published at a time: retire any currently
+	// published version before promoting the draft. This keeps the
+	// version referenced by Current consistent before and after rollback.
+	for i := range list {
+		if list[i].State == "published" {
+			list[i].State = "retired"
+		}
+	}
 	list[index].State = "published"
 	list[index].PublishedAt = &now
 	s.versions[id] = list
@@ -86,13 +94,17 @@ func (s *ConfigStore) Rollback(ctx context.Context, id string, version int) (dom
 	if target < 0 {
 		return domain.AlgorithmConfig{}, fmt.Errorf("version %d not found", version)
 	}
+	if list[target].State == "draft" {
+		return domain.AlgorithmConfig{}, fmt.Errorf("version %d is a draft and cannot be rolled back to", version)
+	}
+	now := time.Now().UTC()
 	for i := range list {
 		if list[i].State == "published" {
 			list[i].State = "retired"
 		}
 	}
 	list[target].State = "published"
-	list[target].PublishedAt = nil
+	list[target].PublishedAt = &now
 	s.versions[id] = list
 	return list[target], nil
 }
@@ -105,8 +117,14 @@ func (s *ConfigStore) Current(ctx context.Context, id string) (domain.AlgorithmC
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	list := s.versions[id]
-	if len(list) > 0 {
-		return list[len(list)-1], nil
+	// Current is the most recently published version, never a draft or a
+	// retired version. Returning the last-appended entry would surface a
+	// still-draft config to fingerprinting, which is how a new algorithm
+	// ends up active before it is published.
+	for i := len(list) - 1; i >= 0; i-- {
+		if list[i].State == "published" {
+			return list[i], nil
+		}
 	}
 	return domain.AlgorithmConfig{}, fmt.Errorf("published algorithm %q not found", id)
 }

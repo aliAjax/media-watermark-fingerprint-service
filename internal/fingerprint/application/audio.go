@@ -37,7 +37,7 @@ func (AudioAlgorithm) Build(ctx context.Context, id, assetID string, samples aud
 		bits, energy := audioBits(mono[start:end])
 		segments = append(segments, domain.Segment{Start: time.Duration(float64(start) / float64(samples.Rate) * float64(time.Second)), End: time.Duration(float64(end) / float64(samples.Rate) * float64(time.Second)), Bits: bits, Energy: energy})
 	}
-	return domain.Fingerprint{ID: id, AssetID: assetID, Kind: domain.KindAudio, Algorithm: cfg.ID, Version: "a" + itoa(cfg.Version+1), Window: cfg.AudioWindow, Overlap: cfg.Overlap, Segments: segments, CreatedAt: time.Now().UTC()}
+	return domain.Fingerprint{ID: id, AssetID: assetID, Kind: domain.KindAudio, Algorithm: cfg.ID, Version: "a" + itoa(cfg.Version), Window: cfg.AudioWindow, Overlap: cfg.Overlap, Segments: segments, CreatedAt: time.Now().UTC()}
 }
 func audioBits(values []float32) (uint64, float64) {
 	bins := [64]float64{}
