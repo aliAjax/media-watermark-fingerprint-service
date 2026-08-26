@@ -14,6 +14,7 @@ type Store interface {
 	Get(context.Context, string) (domain.Job, error)
 	Update(context.Context, domain.Job) error
 	List(context.Context) ([]domain.Job, error)
+	CompareAndSet(ctx context.Context, id string, expected map[domain.Status]struct{}, apply func(domain.Job) domain.Job) (domain.Job, bool, error)
 }
 type Clock interface{ Now() time.Time }
 type Queue struct {
@@ -68,22 +69,35 @@ func (q *Queue) Cancel(ctx context.Context, id string) (domain.Job, error) {
 	if err != nil {
 		return j, err
 	}
-	if j.Status == domain.StatusQueued || j.Status == domain.StatusRunning {
-		q.mu.RLock()
-		cancel := q.cancels[id]
-		q.mu.RUnlock()
-		if cancel != nil {
-			cancel()
-		}
-		j.Status = domain.StatusCanceled
-		j.Error = "canceled by request"
-		now := q.clock.Now()
-		j.FinishedAt = &now
-		if err := q.store.Update(ctx, j); err != nil {
-			return j, err
-		}
+	if j.Status != domain.StatusQueued && j.Status != domain.StatusRunning {
+		return j, nil
 	}
-	return j, nil
+	q.mu.RLock()
+	cancel := q.cancels[id]
+	q.mu.RUnlock()
+	if cancel != nil {
+		cancel()
+	}
+	updated, ok, err := q.store.CompareAndSet(ctx, id, statusSet(domain.StatusQueued, domain.StatusRunning), func(cur domain.Job) domain.Job {
+		cur.Status = domain.StatusCanceled
+		cur.Error = "canceled by request"
+		now := q.clock.Now()
+		cur.FinishedAt = &now
+		return cur
+	})
+	if err != nil {
+		return j, err
+	}
+	if ok {
+		return updated, nil
+	}
+	// The job transitioned out of queued/running before we could cancel it
+	// (e.g. a worker finished it concurrently). Return the current state.
+	cur, err := q.store.Get(ctx, id)
+	if err != nil {
+		return j, nil
+	}
+	return cur, nil
 }
 func (q *Queue) run(workers int) {
 	var wg sync.WaitGroup
@@ -93,6 +107,13 @@ func (q *Queue) run(workers int) {
 	}
 	wg.Wait()
 	close(q.done)
+}
+func statusSet(statuses ...domain.Status) map[domain.Status]struct{} {
+	out := make(map[domain.Status]struct{}, len(statuses))
+	for _, s := range statuses {
+		out[s] = struct{}{}
+	}
+	return out
 }
 func (q *Queue) worker() {
 	for {
@@ -117,44 +138,55 @@ func (q *Queue) worker() {
 			h := q.handlers[j.Kind]
 			q.mu.RUnlock()
 			if h == nil {
-				j.Status = domain.StatusFailed
-				j.Error = "no handler"
-				_ = q.store.Update(context.Background(), j)
+				_, _, _ = q.store.CompareAndSet(context.Background(), j.ID, statusSet(domain.StatusQueued), func(cur domain.Job) domain.Job {
+					cur.Status = domain.StatusFailed
+					cur.Error = "no handler"
+					now := q.clock.Now()
+					cur.FinishedAt = &now
+					return cur
+				})
 				continue
 			}
+			// Atomically claim the job: only transition queued -> running.
+			// This prevents two workers from picking up the same job.
+			claimed, ok, _ := q.store.CompareAndSet(context.Background(), j.ID, statusSet(domain.StatusQueued), func(cur domain.Job) domain.Job {
+				cur.Status = domain.StatusRunning
+				cur.Attempt++
+				now := q.clock.Now()
+				cur.StartedAt = &now
+				return cur
+			})
+			if !ok {
+				continue
+			}
+			j = claimed
 			jobCtx, cancel := context.WithCancel(context.Background())
 			q.mu.Lock()
 			q.cancels[j.ID] = cancel
 			q.mu.Unlock()
-			j.Status = domain.StatusRunning
-			j.Attempt++
-			now := q.clock.Now()
-			j.StartedAt = &now
-			_ = q.store.Update(context.Background(), j)
 			err := h(jobCtx, j)
 			q.mu.Lock()
 			delete(q.cancels, j.ID)
 			q.mu.Unlock()
 			cancel()
-			latest, _ := q.store.Get(context.Background(), j.ID)
-			if latest.Status == domain.StatusCanceled {
-				did = true
-				continue
-			}
-			if err == nil {
-				j.Status = domain.StatusSucceeded
-				j.Error = ""
-			} else {
-				j.Error = err.Error()
-				if j.Attempt >= j.MaxAttempts {
-					j.Status = domain.StatusDead
+			// Finalize only if the job is still running. If a cancel raced in
+			// and moved it to canceled, leave that terminal state intact.
+			_, _, _ = q.store.CompareAndSet(context.Background(), j.ID, statusSet(domain.StatusRunning), func(cur domain.Job) domain.Job {
+				if err == nil {
+					cur.Status = domain.StatusSucceeded
+					cur.Error = ""
 				} else {
-					j.Status = domain.StatusQueued
+					cur.Error = err.Error()
+					if cur.Attempt >= cur.MaxAttempts {
+						cur.Status = domain.StatusDead
+					} else {
+						cur.Status = domain.StatusQueued
+					}
 				}
-			}
-			end := q.clock.Now()
-			j.FinishedAt = &end
-			_ = q.store.Update(context.Background(), j)
+				end := q.clock.Now()
+				cur.FinishedAt = &end
+				return cur
+			})
 			did = true
 		}
 		if !did {

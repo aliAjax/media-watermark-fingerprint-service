@@ -33,6 +33,8 @@ func (m *Memory) Get(ctx context.Context, id string) (domain.Job, error) {
 		return domain.Job{}, ctx.Err()
 	default:
 	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	j, ok := m.jobs[id]
 	if !ok {
 		return domain.Job{}, fmt.Errorf("job %q not found", id)
@@ -52,6 +54,25 @@ func (m *Memory) Update(ctx context.Context, j domain.Job) error {
 	}
 	m.jobs[j.ID] = j
 	return nil
+}
+func (m *Memory) CompareAndSet(ctx context.Context, id string, expected map[domain.Status]struct{}, apply func(domain.Job) domain.Job) (domain.Job, bool, error) {
+	select {
+	case <-ctx.Done():
+		return domain.Job{}, false, ctx.Err()
+	default:
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	current, ok := m.jobs[id]
+	if !ok {
+		return domain.Job{}, false, fmt.Errorf("job %q not found", id)
+	}
+	if _, allow := expected[current.Status]; !allow {
+		return current, false, nil
+	}
+	next := apply(current)
+	m.jobs[id] = next
+	return next, true, nil
 }
 func (m *Memory) List(ctx context.Context) ([]domain.Job, error) {
 	select {
