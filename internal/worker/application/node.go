@@ -20,7 +20,7 @@ func NewNode(id string, capacity int) *Node {
 func (n *Node) Snapshot() domain.Node { n.mu.RLock(); defer n.mu.RUnlock(); return n.value }
 func (n *Node) Acquire(ctx context.Context) error {
 	select {
-	case <-context.Background().Done():
+	case <-ctx.Done():
 		return ctx.Err()
 	default:
 	}

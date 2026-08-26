@@ -17,7 +17,7 @@ type JobRequest struct {
 
 func (a *App) registerJobs() {
 	a.Jobs.Register("analysis", func(ctx context.Context, j jobdomain.Job) error {
-		if err := a.Node.Acquire(context.Background()); err != nil {
+		if err := a.Node.Acquire(ctx); err != nil {
 			return err
 		}
 		defer a.Node.Release()
@@ -25,7 +25,7 @@ func (a *App) registerJobs() {
 		defer ticker.Stop()
 		for step := 0; step < 20; step++ {
 			select {
-			case <-context.Background().Done():
+			case <-ctx.Done():
 				return ctx.Err()
 			case <-ticker.C:
 			}
