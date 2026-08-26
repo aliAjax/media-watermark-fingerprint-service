@@ -1,0 +1,30 @@
+openapi: 3.0.3
+info: {title: Media Watermark Fingerprinting API, version: 1.0.0}
+servers: [{url: http://localhost:8090}]
+paths:
+  /v1/assets:
+    post:
+      summary: Upload and parse media
+      requestBody: {required: true, content: {application/octet-stream: {schema: {type: string, format: binary}}}}
+      responses: {'201': {description: Created}}
+  /v1/assets/{assetId}/fingerprints:
+    post:
+      summary: Build perceptual fingerprint
+      parameters: [{in: path, name: assetId, required: true, schema: {type: string}}]
+      responses: {'201': {description: Created}}
+  /v1/assets/{assetId}/watermarks/embed:
+    post:
+      summary: Embed signed watermark
+      parameters: [{in: path, name: assetId, required: true, schema: {type: string}}]
+      responses: {'201': {description: Created}}
+  /v1/watermarks/detect: {post: {summary: Detect watermark, responses: {'200': {description: Result}}}}
+  /v1/matches: {post: {summary: Match fingerprint, responses: {'200': {description: Candidates}}}}
+  /v1/jobs: {post: {summary: Enqueue task, responses: {'202': {description: Accepted}}}}
+  /v1/jobs/{jobId}/cancel:
+    post:
+      summary: Cancel task
+      parameters: [{in: path, name: jobId, required: true, schema: {type: string}}]
+      responses: {'200': {description: Canceled}}
+  /healthz: {get: {responses: {'200': {description: Live}}}}
+  /readyz: {get: {responses: {'200': {description: Ready}}}}
+  /metrics: {get: {responses: {'200': {description: Prometheus text}}}}
