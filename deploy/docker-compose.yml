@@ -1,0 +1,12 @@
+services:
+  media:
+    build: ..
+    ports: ["8090:8090", "9090:9090"]
+    environment:
+      MWF_API_KEY: development-key
+      MWF_WATERMARK_SECRET: local-signing-key
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8090/readyz"]
+      interval: 5s
+      timeout: 2s
+      retries: 5
