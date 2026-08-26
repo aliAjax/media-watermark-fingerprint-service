@@ -1,0 +1,10 @@
+http_address: ":8090"
+grpc_address: ":9090"
+api_key: "development-key"
+max_body_bytes: 4194304
+max_asset_bytes: 33554432
+request_timeout: "15s"
+lease_duration: "20s"
+worker_count: 2
+storage_dir: "./data"
+watermark_secret: "local-signing-key"
