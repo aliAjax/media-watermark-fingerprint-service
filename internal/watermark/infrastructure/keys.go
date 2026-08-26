@@ -22,6 +22,8 @@ func (k *Keys) Current(ctx context.Context) (domain.Key, error) {
 		return domain.Key{}, ctx.Err()
 	default:
 	}
+	k.mu.RLock()
+	defer k.mu.RUnlock()
 	for i := len(k.keys) - 1; i >= 0; i-- {
 		if k.keys[i].Active {
 			return k.keys[i], nil
@@ -35,7 +37,13 @@ func (k *Keys) All(ctx context.Context) ([]domain.Key, error) {
 		return nil, ctx.Err()
 	default:
 	}
-	return k.keys, nil
+	k.mu.RLock()
+	defer k.mu.RUnlock()
+	// Return a defensive copy so callers can iterate without racing Rotate's
+	// in-place mutations of the shared backing array.
+	out := make([]domain.Key, len(k.keys))
+	copy(out, k.keys)
+	return out, nil
 }
 func (k *Keys) Rotate(ctx context.Context, secret []byte) (domain.Key, error) {
 	if len(secret) < 8 {
@@ -46,6 +54,8 @@ func (k *Keys) Rotate(ctx context.Context, secret []byte) (domain.Key, error) {
 		return domain.Key{}, ctx.Err()
 	default:
 	}
+	k.mu.Lock()
+	defer k.mu.Unlock()
 	for i := range k.keys {
 		k.keys[i].Active = false
 	}
